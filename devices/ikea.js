@@ -5,7 +5,10 @@ const ota = require('../lib/ota');
 const constants = require('../lib/constants');
 const reporting = require('../lib/reporting');
 const {repInterval} = require('../lib/constants');
+const utils = require('../lib/utils');
+const libColor = require('../lib/color');
 const extend = require('../lib/extend');
+const globalStore = require('../lib/store');
 const e = exposes.presets;
 const ea = exposes.access;
 const herdsman = require('zigbee-herdsman');
@@ -42,6 +45,18 @@ const bulbOnEvent = async (type, data, device, options, state) => {
         if (state !== undefined && state.level_config !== undefined && state.level_config.execute_if_off === true) {
             device.endpoints[0].write('genLevelCtrl', {'options': 1});
         }
+        if (state !== undefined && state.level_config !== undefined && state.level_config.on_level !== undefined) {
+            let onLevel = state.level_config.on_level;
+            if (typeof onLevel === 'string' && onLevel.toLowerCase() == 'previous') {
+                onLevel = 255;
+            } else {
+                onLevel = Number(onLevel);
+            }
+            if (onLevel > 255) onLevel = 254;
+            if (onLevel < 1) onLevel = 1;
+
+            device.endpoints[0].write('genLevelCtrl', {onLevel});
+        }
     }
 };
 
@@ -58,28 +73,81 @@ const configureRemote = async (device, coordinatorEndpoint, logger) => {
     await reporting.batteryPercentageRemaining(endpoint);
 };
 
+const tzLocal = {
+    LED1624G9_color_colortemp: {
+        ...tz.light_color_colortemp,
+        convertSet: async (entity, key, value, meta) => {
+            if (key == 'color') {
+                const result = await tz.light_color.convertSet(entity, key, value, meta);
+                return result;
+            } else if (key == 'color_temp' || key == 'color_temp_percent') {
+                const xy = libColor.ColorXY.fromMireds(value);
+                const payload = {
+                    transtime: utils.getTransition(entity, key, meta).time,
+                    colorx: utils.mapNumberRange(xy.x, 0, 1, 0, 65535),
+                    colory: utils.mapNumberRange(xy.y, 0, 1, 0, 65535),
+                };
+                await entity.command('lightingColorCtrl', 'moveToColor', payload, utils.getOptions(meta.mapped, entity));
+                return {
+                    state: libColor.syncColorState({'color_mode': constants.colorMode[2], 'color_temp': value}, meta.state,
+                        entity, meta.options, meta.logger), readAfterWriteTime: payload.transtime * 100,
+                };
+            }
+        },
+    },
+};
+
+const fzLocal = {
+    // The STYRBAR sends an on +- 500ms after the arrow release. We don't want to send the ON action in this case.
+    // https://github.com/Koenkk/zigbee2mqtt/issues/13335
+    STYRBAR_on: {
+        cluster: 'genOnOff',
+        type: 'commandOn',
+        convert: (model, msg, publish, options, meta) => {
+            if (utils.hasAlreadyProcessedMessage(msg, model)) return;
+            const arrowReleaseAgo = Date.now() - globalStore.getValue(msg.endpoint, 'arrow_release', 0);
+            if (arrowReleaseAgo > 700) {
+                return {action: 'on'};
+            }
+        },
+    },
+    STYRBAR_arrow_release: {
+        cluster: 'genScenes',
+        type: 'commandTradfriArrowRelease',
+        options: [exposes.options.legacy()],
+        convert: (model, msg, publish, options, meta) => {
+            if (utils.hasAlreadyProcessedMessage(msg, model)) return;
+            globalStore.putValue(msg.endpoint, 'arrow_release', Date.now());
+            const direction = globalStore.getValue(msg.endpoint, 'direction');
+            if (direction) {
+                globalStore.clearValue(msg.endpoint, 'direction');
+                const duration = msg.data.value / 1000;
+                const result = {action: `arrow_${direction}_release`, duration, action_duration: duration};
+                if (!utils.isLegacyEnabled(options)) delete result.duration;
+                return result;
+            }
+        },
+    },
+};
+
 const tradfriExtend = {
     light_onoff_brightness: (options = {}) => ({
         ...extend.light_onoff_brightness(options),
-        exposes: extend.light_onoff_brightness(options).exposes.concat(e.power_on_behavior()),
         ota: ota.tradfri,
         onEvent: bulbOnEvent,
     }),
     light_onoff_brightness_colortemp: (options = {colorTempRange: [250, 454]}) => ({
         ...extend.light_onoff_brightness_colortemp(options),
-        exposes: extend.light_onoff_brightness_colortemp(options).exposes.concat(e.power_on_behavior()),
         ota: ota.tradfri,
         onEvent: bulbOnEvent,
     }),
     light_onoff_brightness_colortemp_color: (options = {disableColorTempStartup: true, colorTempRange: [250, 454]}) => ({
         ...extend.light_onoff_brightness_colortemp_color(options),
-        exposes: extend.light_onoff_brightness_colortemp_color(options).exposes.concat(e.power_on_behavior()),
         ota: ota.tradfri,
         onEvent: bulbOnEvent,
     }),
     light_onoff_brightness_color: (options = {}) => ({
         ...extend.light_onoff_brightness_color(options),
-        exposes: extend.light_onoff_brightness_color(options).exposes.concat(e.power_on_behavior()),
         ota: ota.tradfri,
         onEvent: bulbOnEvent,
     }),
@@ -285,6 +353,13 @@ module.exports = [
         extend: tradfriExtend.light_onoff_brightness(),
     },
     {
+        zigbeeModel: ['TRADFRIbulbE26WWglobeclear250lm'],
+        model: 'LED2008G3',
+        vendor: 'IKEA',
+        description: 'TRADFRI LED bulb E26 250 lumen, wireless dimmable warm white/globe clear',
+        extend: tradfriExtend.light_onoff_brightness(),
+    },
+    {
         zigbeeModel: ['TRADFRIbulbG125E27WSopal470lm', 'TRADFRIbulbG125E26WSopal450lm'],
         model: 'LED1936G5',
         vendor: 'IKEA',
@@ -300,10 +375,10 @@ module.exports = [
         extend: tradfriExtend.light_onoff_brightness_colortemp(),
     },
     {
-        zigbeeModel: ['TRADFRIbulbE27WSglobeclear806lm'],
+        zigbeeModel: ['TRADFRIbulbE26WSglobeclear800lm', 'TRADFRIbulbE27WSglobeclear806lm', 'TRADFRIbulbE26WSglobeclear806lm'],
         model: 'LED2004G8',
         vendor: 'IKEA',
-        description: 'TRADFRI LED bulb E27 806 lumen, dimmable, white spectrum, clear',
+        description: 'TRADFRI LED bulb E26/E27 800/806 lumen, dimmable, white spectrum, clear',
         extend: tradfriExtend.light_onoff_brightness_colortemp(),
     },
     {
@@ -314,10 +389,10 @@ module.exports = [
         extend: tradfriExtend.light_onoff_brightness_colortemp(),
     },
     {
-        zigbeeModel: ['TRADFRIbulbT120E26WSopal450lm'],
+        zigbeeModel: ['TRADFRIbulbT120E26WSopal450lm', 'TRADFRIbulbT120E26WSopal470lm'],
         model: 'LED1937T5_E26',
         vendor: 'IKEA',
-        description: 'LED bulb E26 450 lumen, wireless dimmable white spectrum/tube-shaped white frosted glass',
+        description: 'LED bulb E26 450/470 lumen, wireless dimmable white spectrum/tube-shaped white frosted glass',
         extend: tradfriExtend.light_onoff_brightness_colortemp(),
     },
     {
@@ -353,6 +428,13 @@ module.exports = [
         model: 'LED1903C5/LED1835C6',
         vendor: 'IKEA',
         description: 'TRADFRI bulb E12/E14/E17 WS 450/470/440 lumen, dimmable, white spectrum, opal white',
+        extend: tradfriExtend.light_onoff_brightness_colortemp(),
+    },
+    {
+        zigbeeModel: ['TRADFRI bulb E14 WS globe 470lm'],
+        model: 'LED2101G4',
+        vendor: 'IKEA',
+        description: 'TRADFRI bulb E14 WS globe 470lm, dimmable, white spectrum, opal white',
         extend: tradfriExtend.light_onoff_brightness_colortemp(),
     },
     {
@@ -404,11 +486,16 @@ module.exports = [
         model: 'LED1624G9',
         vendor: 'IKEA',
         description: 'TRADFRI LED bulb E14/E26/E27 600 lumen, dimmable, color, opal white',
-        extend: tradfriExtend.light_onoff_brightness_color(),
+        extend: tradfriExtend.light_onoff_brightness_colortemp_color(),
+        toZigbee: utils.replaceInArray(
+            tradfriExtend.light_onoff_brightness_colortemp_color().toZigbee,
+            [tz.light_color_colortemp],
+            [tzLocal.LED1624G9_color_colortemp],
+        ),
         meta: {supportsHueAndSaturation: false},
     },
     {
-        zigbeeModel: ['TRADFRI bulb E26 CWS 800lm', 'TRADFRI bulb E27 CWS 806lm'],
+        zigbeeModel: ['TRADFRI bulb E26 CWS 800lm', 'TRADFRI bulb E27 CWS 806lm', 'TRADFRI bulb E26 CWS 806lm'],
         model: 'LED1924G9',
         vendor: 'IKEA',
         description: 'TRADFRI bulb E26/E27 CWS 800/806 lumen, dimmable, color, opal white',
@@ -571,9 +658,9 @@ module.exports = [
         zigbeeModel: ['Remote Control N2'],
         model: 'E2001/E2002',
         vendor: 'IKEA',
-        description: 'STYRBAR remote control N2',
-        fromZigbee: [fz.battery, fz.command_on, fz.command_off, fz.command_move, fz.command_stop, fz.ikea_arrow_click,
-            fz.ikea_arrow_hold, fz.ikea_arrow_release],
+        description: 'STYRBAR remote control',
+        fromZigbee: [fz.battery, fzLocal.STYRBAR_on, fz.command_off, fz.command_move, fz.command_stop, fz.ikea_arrow_click,
+            fz.ikea_arrow_hold, fzLocal.STYRBAR_arrow_release],
         exposes: [e.battery(), e.action(['on', 'off', 'brightness_move_up', 'brightness_move_down',
             'brightness_stop', 'arrow_left_click', 'arrow_right_click', 'arrow_left_hold',
             'arrow_right_hold', 'arrow_left_release', 'arrow_right_release'])],
@@ -814,12 +901,20 @@ module.exports = [
         vendor: 'IKEA',
         description: 'TRADFRI LED bulb E14 470 lumen, opal, dimmable, white spectrum, color spectrum',
         extend: tradfriExtend.light_onoff_brightness_colortemp_color(),
+        meta: {turnsOffAtBrightness1: true},
     },
     {
         zigbeeModel: ['TRADFRIbulbE14WWclear250lm', 'TRADFRIbulbE12WWclear250lm'],
         model: 'LED1935C3',
         vendor: 'IKEA',
         description: 'TRADFRI LED bulb E12/E14 WW clear 250 lumen, dimmable',
+        extend: tradfriExtend.light_onoff_brightness(),
+    },
+    {
+        zigbeeModel: ['TRADFRIbulbE12WWcandleclear250lm'],
+        model: 'LED2009C3',
+        vendor: 'IKEA',
+        description: 'TRADFRI LED bulb E12 WW candle clear 250 lumen, dimmable',
         extend: tradfriExtend.light_onoff_brightness(),
     },
     {
@@ -875,6 +970,7 @@ module.exports = [
 
             await endpoint.read('manuSpecificIkeaAirPurifier', ['controlPanelLight', 'childLock', 'filterRunTime']);
         },
+        ota: ota.tradfri,
     },
     {
         zigbeeModel: ['TRADFRIbulbE14WScandleopal470lm', 'TRADFRIbulbE12WScandleopal450lm'],
@@ -888,6 +984,27 @@ module.exports = [
         model: '90504044',
         vendor: 'IKEA',
         description: 'NYMÅNE Pendant lamp',
+        extend: tradfriExtend.light_onoff_brightness_colortemp(),
+    },
+    {
+        zigbeeModel: ['STOFTMOLN ceiling/wall lamp WW37'],
+        model: 'T2037',
+        vendor: 'IKEA',
+        description: 'STOFTMOLN ceiling/wall lamp 37 warm light dimmable',
+        extend: tradfriExtend.light_onoff_brightness(),
+    },
+    {
+        zigbeeModel: ['STOFTMOLN ceiling/wall lamp WW24'],
+        model: 'T2035',
+        vendor: 'IKEA',
+        description: 'STOFTMOLN ceiling/wall lamp 24 warm light dimmable',
+        extend: tradfriExtend.light_onoff_brightness(),
+    },
+    {
+        zigbeeModel: ['TRADFRIbulbPAR38WS900lm'],
+        model: 'LED2006R9',
+        vendor: 'IKEA',
+        description: 'TRADFRI E26 PAR38 LED bulb 900 lumen, dimmable, white spectrum, downlight',
         extend: tradfriExtend.light_onoff_brightness_colortemp(),
     },
 ];

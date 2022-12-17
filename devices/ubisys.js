@@ -4,6 +4,7 @@ const tz = require('../converters/toZigbee');
 const ota = require('../lib/ota');
 const utils = require('../lib/utils');
 const reporting = require('../lib/reporting');
+const constants = require('../lib/constants');
 const herdsman = require('zigbee-herdsman');
 const e = exposes.presets;
 const ea = exposes.access;
@@ -17,6 +18,14 @@ const manufacturerOptions = {
     ubisys: {manufacturerCode: herdsman.Zcl.ManufacturerCode.UBISYS},
     ubisysNull: {manufacturerCode: null},
     tint: {manufacturerCode: herdsman.Zcl.ManufacturerCode.MUELLER_LICHT_INT},
+};
+
+const ubisysOnEventReadCurrentSummDelivered = async function(type, data, devic) {
+    if (data.type === 'attributeReport' && data.cluster === 'seMetering') {
+        try {
+            await data.endpoint.read('seMetering', ['currentSummDelivered']);
+        } catch (error) {/* Do nothing*/}
+    }
 };
 
 const ubisys = {
@@ -79,15 +88,24 @@ const ubisys = {
             type: ['attributeReport', 'readResponse'],
             convert: (model, msg, publish, options, meta) => {
                 const result = {};
-                if (msg.data.hasOwnProperty('input_configurations')) {
-                    result['input_configurations'] = msg.data['input_configurations'];
+                if (msg.data['inputConfigurations'] != null) {
+                    result['input_configurations'] = msg.data['inputConfigurations'];
                 }
-                if (msg.data.hasOwnProperty('inputActions')) {
+                if (msg.data['inputActions'] != null) {
                     result['input_actions'] = msg.data['inputActions'].map(function(el) {
                         return Object.values(el);
                     });
                 }
                 return {configure_device_setup: result};
+            },
+        },
+        thermostat_vacation_mode: {
+            cluster: 'hvacThermostat',
+            type: ['attributeReport', 'readResponse'],
+            convert: (model, msg, publish, options, meta) => {
+                if (msg.data.hasOwnProperty('occupancy')) {
+                    return {vacation_mode: msg.data.occupancy === 0};
+                }
             },
         },
     },
@@ -503,6 +521,12 @@ const ubisys = {
                     manufacturerOptions.ubisysNull);
             },
         },
+        thermostat_vacation_mode: {
+            key: ['vacation_mode'],
+            convertGet: async (entity, key, meta) => {
+                await entity.read('hvacThermostat', ['occupancy']);
+            },
+        },
     },
 };
 
@@ -517,7 +541,7 @@ module.exports = [
                 'toggle', 'on', 'off', 'recall_*',
                 'brightness_move_up', 'brightness_move_down', 'brightness_stop',
             ]),
-            e.power_on_behavior()],
+            e.power_on_behavior(), e.energy()],
         fromZigbee: [fz.on_off, fz.metering, fz.command_toggle, fz.command_on, fz.command_off, fz.command_recall, fz.command_move,
             fz.command_stop, fz.power_on_behavior, ubisys.fz.configure_device_setup],
         toZigbee: [tz.on_off, tz.metering_power, ubisys.tz.configure_device_setup, tz.power_on_behavior],
@@ -545,6 +569,8 @@ module.exports = [
                 const ep1 = device.getEndpoint(1);
                 const ep2 = device.getEndpoint(2);
                 ep2.addBinding('genOnOff', ep1);
+            } else {
+                await ubisysOnEventReadCurrentSummDelivered(type, data, device);
             }
         },
         ota: ota.ubisys,
@@ -559,7 +585,7 @@ module.exports = [
                 'toggle', 'on', 'off', 'recall_*',
                 'brightness_move_up', 'brightness_move_down', 'brightness_stop',
             ]),
-            e.power_on_behavior()],
+            e.power_on_behavior(), e.energy()],
         fromZigbee: [fz.on_off, fz.metering, fz.command_toggle, fz.command_on, fz.command_off, fz.command_recall, fz.command_move,
             fz.command_stop, fz.power_on_behavior, ubisys.fz.configure_device_setup],
         toZigbee: [tz.on_off, tz.metering_power, ubisys.tz.configure_device_setup, tz.power_on_behavior],
@@ -587,6 +613,8 @@ module.exports = [
                 const ep1 = device.getEndpoint(1);
                 const ep2 = device.getEndpoint(2);
                 ep2.addBinding('genOnOff', ep1);
+            } else {
+                await ubisysOnEventReadCurrentSummDelivered(type, data, device);
             }
         },
         ota: ota.ubisys,
@@ -599,6 +627,7 @@ module.exports = [
         exposes: [
             e.switch().withEndpoint('l1'), e.switch().withEndpoint('l2'),
             e.power().withAccess(ea.STATE_GET).withEndpoint('meter').withProperty('power'),
+            e.energy(),
             e.action(['toggle_s1', 'toggle_s2', 'on_s1', 'on_s2', 'off_s1', 'off_s2', 'recall_*_s1', 'recal_*_s2', 'brightness_move_up_s1',
                 'brightness_move_up_s2', 'brightness_move_down_s1', 'brightness_move_down_s2', 'brightness_stop_s1',
                 'brightness_stop_s2']),
@@ -639,6 +668,8 @@ module.exports = [
                 const ep4 = device.getEndpoint(4);
                 ep3.addBinding('genOnOff', ep1);
                 ep4.addBinding('genOnOff', ep2);
+            } else {
+                await ubisysOnEventReadCurrentSummDelivered(type, data, device);
             }
         },
         ota: ota.ubisys,
@@ -654,17 +685,41 @@ module.exports = [
         toZigbee: [tz.light_onoff_brightness, tz.ballast_config, tz.level_config, ubisys.tz.dimmer_setup,
             ubisys.tz.dimmer_setup_genLevelCtrl, ubisys.tz.configure_device_setup, tz.ignore_transition, tz.light_brightness_move,
             tz.light_brightness_step],
-        exposes: [e.light_brightness().withLevelConfig(), e.power(),
-            exposes.numeric('ballast_physical_minimum_level', ea.ALL).withValueMin(1).withValueMax(254)
-                .withDescription('Specifies the minimum light output the ballast can achieve.'),
-            exposes.numeric('ballast_physical_maximum_level', ea.ALL).withValueMin(1).withValueMax(254)
-                .withDescription('Specifies the maximum light output the ballast can achieve.'),
+        exposes: [
+            e.action(['toggle_s1', 'toggle_s2', 'on_s1', 'on_s2', 'off_s1', 'off_s2', 'recall_*_s1', 'recal_*_s2', 'brightness_move_up_s1',
+                'brightness_move_up_s2', 'brightness_move_down_s1', 'brightness_move_down_s2', 'brightness_stop_s1',
+                'brightness_stop_s2']),
+            e.light_brightness(),
+            exposes.composite('level_config', 'level_config')
+                .withFeature(exposes.numeric('on_off_transition_time', ea.ALL)
+                    .withDescription('Specifies the amount of time, in units of 0.1 seconds, which will be used during a transition to ' +
+                    'either the on or off state, when an on/off/toggle command of the on/off cluster is used to turn the light on or off'))
+                .withFeature(exposes.numeric('on_level', ea.ALL)
+                    .withValueMin(1).withValueMax(254)
+                    .withPreset('previous', 255, 'Use previous value')
+                    .withDescription('Specifies the level that shall be applied, when an on/toggle command causes the light to turn on.'))
+                .withFeature(exposes.binary('execute_if_off', ea.ALL, true, false)
+                    .withDescription('Defines if you can send a brightness change without to turn on the light'))
+                .withFeature(exposes.numeric('current_level_startup', ea.ALL)
+                    .withValueMin(1).withValueMax(254)
+                    .withPreset('previous', 255, 'Use previous value')
+                    .withDescription('Specifies the initial level to be applied after the device is supplied with power')),
+            e.power(), e.energy(),
             exposes.numeric('ballast_minimum_level', ea.ALL).withValueMin(1).withValueMax(254)
                 .withDescription('Specifies the minimum light output of the ballast'),
             exposes.numeric('ballast_maximum_level', ea.ALL).withValueMin(1).withValueMax(254)
                 .withDescription('Specifies the maximum light output of the ballast'),
             exposes.numeric('minimum_on_level', ea.ALL).withValueMin(0).withValueMax(255)
-                .withDescription('Specifies the minimum light output after switching on'),
+                .withDescription('Specifies the minimum level that shall be applied, when an on/toggle command causes the ' +
+                'light to turn on. When this attribute is set to the invalid value (255) this feature is disabled ' +
+                'and standard rules apply: The light will either return to the previously active level (before it ' +
+                'was turned off) if the OnLevel attribute is set to the invalid value (255/previous); or to the specified ' +
+                'value of the OnLevel attribute if this value is in the range 0…254. Otherwise, if the ' +
+                'MinimumOnLevel is in the range 0…254, the light will be set to the the previously ' +
+                'active level (before it was turned off), or the value specified here, whichever is the larger ' +
+                'value. For example, if the previous level was 30 and the MinimumOnLevel was 40 then ' +
+                'the light would turn on and move to level 40. Conversely, if the previous level was 50, ' +
+                'and the MinimumOnLevel was 40, then the light would turn on and move to level 50.'),
             exposes.binary('capabilities_forward_phase_control', ea.ALL, true, false)
                 .withDescription('The dimmer supports AC forward phase control.'),
             exposes.binary('capabilities_reverse_phase_control', ea.ALL, true, false)
@@ -693,6 +748,10 @@ module.exports = [
             await reporting.readMeteringMultiplierDivisor(endpoint);
             await reporting.instantaneousDemand(endpoint);
         },
+        meta: {multiEndpoint: true, multiEndpointSkip: ['state', 'brightness']},
+        endpoint: (device) => {
+            return {'default': 1, 's1': 2, 's2': 3, 'meter': 4};
+        },
         onEvent: async (type, data, device) => {
             /*
              * As per technical doc page 23 section 7.3.4, 7.3.5
@@ -705,6 +764,8 @@ module.exports = [
                 const ep2 = device.getEndpoint(2);
                 ep2.addBinding('genOnOff', ep1);
                 ep2.addBinding('genLevelCtrl', ep1);
+            } else {
+                await ubisysOnEventReadCurrentSummDelivered(type, data, device);
             }
         },
         ota: ota.ubisys,
@@ -718,7 +779,7 @@ module.exports = [
         toZigbee: [tz.cover_state, tz.cover_position_tilt, tz.metering_power,
             ubisys.tz.configure_j1, ubisys.tz.configure_device_setup],
         exposes: [e.cover_position_tilt(),
-            e.power().withAccess(ea.STATE_GET).withEndpoint('meter').withProperty('power')],
+            e.power().withAccess(ea.STATE_GET).withEndpoint('meter').withProperty('power'), e.energy()],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint1 = device.getEndpoint(1);
             const endpoint3 = device.getEndpoint(3);
@@ -742,6 +803,8 @@ module.exports = [
                 const ep1 = device.getEndpoint(1);
                 const ep2 = device.getEndpoint(2);
                 ep2.addBinding('closuresWindowCovering', ep1);
+            } else {
+                await ubisysOnEventReadCurrentSummDelivered(type, data, device);
             }
         },
         ota: ota.ubisys,
@@ -768,6 +831,68 @@ module.exports = [
             for (const ep of [5, 6]) {
                 await reporting.bind(device.getEndpoint(ep), coordinatorEndpoint, ['genScenes', 'closuresWindowCovering']);
             }
+        },
+        ota: ota.ubisys,
+    },
+    {
+        zigbeeModel: ['H1'],
+        model: 'H1',
+        vendor: 'Ubisys',
+        description: 'Heating regulator',
+        meta: {thermostat: {dontMapPIHeatingDemand: true}},
+        fromZigbee: [fz.battery, fz.thermostat, fz.thermostat_weekly_schedule, ubisys.fz.thermostat_vacation_mode],
+        toZigbee: [
+            tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
+            tz.thermostat_local_temperature, tz.thermostat_system_mode,
+            tz.thermostat_weekly_schedule, tz.thermostat_clear_weekly_schedule,
+            tz.thermostat_running_mode, ubisys.tz.thermostat_vacation_mode,
+            tz.thermostat_pi_heating_demand,
+        ],
+        exposes: [
+            e.battery(),
+            exposes.climate()
+                .withSystemMode(['off', 'heat'], ea.ALL)
+                .withRunningMode(['off', 'heat'])
+                .withSetpoint('occupied_heating_setpoint', 7, 30, 0.5)
+                .withLocalTemperature()
+                .withPiHeatingDemand(ea.STATE_GET),
+            exposes.binary('vacation_mode', ea.STATE_GET, true, false)
+                .withDescription('When Vacation Mode is active the schedule is disabled and unoccupied_heating_setpoint is used.'),
+        ],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            const binds = ['genBasic', 'genPowerCfg', 'genTime', 'hvacThermostat'];
+            await reporting.bind(endpoint, coordinatorEndpoint, binds);
+
+            // reporting
+            // NOTE: temperature is 0.5 deg steps
+            // NOTE: unoccupied_heating_setpoint cannot be set via the device itself
+            //       so we do not need to setup reporting for this, as reporting slots
+            //       seem to be limited.
+            await reporting.thermostatSystemMode(endpoint);
+            await reporting.thermostatRunningMode(endpoint);
+            await reporting.thermostatTemperature(endpoint,
+                {min: 0, max: constants.repInterval.HOUR, change: 50});
+            await reporting.thermostatOccupiedHeatingSetpoint(endpoint,
+                {min: 0, max: constants.repInterval.HOUR, change: 50});
+            await reporting.thermostatPIHeatingDemand(endpoint);
+            await reporting.thermostatOccupancy(endpoint);
+            await reporting.batteryPercentageRemaining(endpoint,
+                {min: constants.repInterval.HOUR, max: 43200, change: 1});
+
+
+            // read attributes
+            // NOTE: configuring reporting on hvacThermostat seems to trigger an imediat
+            //       report, so the values are available after configure has run.
+            //       this does not seem to be the case for genPowerCfg, so we read
+            //       the battery percentage
+            await endpoint.read('genPowerCfg', ['batteryPercentageRemaining']);
+
+            // write attributes
+            // NOTE: device checks in every 1h once the device has entered deepsleep
+            //       this might be a bit long if you want to set the temperature remotely
+            //       update this to every 15 minutes. (value is in 1/4th of a second)
+            await endpoint.write('genPollCtrl', {'checkinInterval': (4 * 60 * 15)});
         },
         ota: ota.ubisys,
     },

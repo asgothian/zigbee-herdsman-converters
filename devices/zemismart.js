@@ -70,8 +70,7 @@ module.exports = [
         whiteLabel: [{vendor: 'BSEED', model: 'TS0003', description: 'Zigbee switch'}],
         meta: {multiEndpoint: true, disableDefaultResponse: true},
         configure: async (device, coordinatorEndpoint, logger) => {
-            await device.getEndpoint(1).read('genBasic',
-                ['manufacturerName', 'zclVersion', 'appVersion', 'modelId', 'powerSource', 0xfffe]);
+            await tuya.configureMagicPacket(device, coordinatorEndpoint, logger);
             await reporting.bind(device.getEndpoint(1), coordinatorEndpoint, ['genOnOff']);
             await reporting.bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
             await reporting.bind(device.getEndpoint(3), coordinatorEndpoint, ['genOnOff']);
@@ -82,18 +81,13 @@ module.exports = [
         model: 'TB25',
         vendor: 'Zemismart',
         description: 'Smart light switch and socket - 2 gang with neutral wire',
-        toZigbee: extend.switch().toZigbee.concat([tz.moes_power_on_behavior]),
-        fromZigbee: extend.switch().fromZigbee.concat([fz.moes_power_on_behavior]),
-        exposes: [e.switch().withEndpoint('left'), e.switch().withEndpoint('center'), e.switch().withEndpoint('right'),
-            exposes.enum('power_on_behavior', ea.ALL, ['on', 'off', 'previous']),
-        ],
+        extend: tuya.extend.switch({endpoints: ['left', 'center', 'right']}),
+        meta: {multiEndpoint: true},
         endpoint: () => {
             return {'left': 1, 'center': 2, 'right': 3};
         },
-        meta: {multiEndpoint: true},
-        configure: async (device, coordinatorEndpoint) => {
-            await device.getEndpoint(1).read('genBasic',
-                ['manufacturerName', 'zclVersion', 'appVersion', 'modelId', 'powerSource', 0xfffe]);
+        configure: async (device, coordinatorEndpoint, logger) => {
+            await tuya.configureMagicPacket(device, coordinatorEndpoint, logger);
             for (const endpointID of [1, 2, 3]) {
                 const endpoint = device.getEndpoint(endpointID);
                 await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
@@ -134,19 +128,13 @@ module.exports = [
         model: 'ZIGBEE-B09-UK',
         vendor: 'Zemismart',
         description: 'Zigbee smart outlet universal socket with USB port',
-        fromZigbee: [fz.on_off, fz.tuya_switch_power_outage_memory],
-        toZigbee: [tz.on_off, tz.tuya_switch_power_outage_memory],
-        exposes: [e.switch().withEndpoint('l1'), e.switch().withEndpoint('l2'),
-            exposes.enum('power_outage_memory', ea.ALL, ['on', 'off', 'restore'])
-                .withDescription('Recover state after power outage')],
+        extend: tuya.extend.switch({powerOutageMemory: true, endpoints: ['l1', 'l2']}),
         endpoint: (device) => {
             return {'l1': 1, 'l2': 2};
         },
         meta: {multiEndpoint: true},
         configure: async (device, coordinatorEndpoint, logger) => {
-            await device.getEndpoint(1).read('genBasic', [
-                'manufacturerName', 'zclVersion', 'appVersion', 'modelId', 'powerSource', 0xfffe]);
-
+            await tuya.configureMagicPacket(device, coordinatorEndpoint, logger);
             await reporting.bind(device.getEndpoint(1), coordinatorEndpoint, ['genOnOff']);
             await reporting.bind(device.getEndpoint(2), coordinatorEndpoint, ['genOnOff']);
             await reporting.onOff(device.getEndpoint(1));
@@ -154,10 +142,7 @@ module.exports = [
         },
     },
     {
-        fingerprint: [
-            {modelID: 'TS0601', manufacturerName: '_TZE200_iossyxra'},
-            {modelID: 'TS0601', manufacturerName: '_TZE200_gubdgai2'},
-        ],
+        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_iossyxra'}],
         model: 'ZM-AM02_cover',
         vendor: 'Zemismart',
         description: 'Zigbee/RF curtain converter',
@@ -184,12 +169,33 @@ module.exports = [
         ],
     },
     {
+        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_gubdgai2'}],
+        model: 'M515EGBZTN',
+        vendor: 'Zemismart',
+        description: 'Roller shade driver',
+        fromZigbee: [fz.ZMAM02_cover],
+        toZigbee: [tz.ZMAM02_cover],
+        exposes: [e.cover_position().setAccess('position', ea.STATE_SET),
+            exposes.enum('motor_direction', ea.STATE_SET, Object.values(tuya.ZMLookups.AM02Direction)),
+            exposes.enum('border', ea.STATE_SET, Object.values(tuya.ZMLookups.AM02Border)),
+        ],
+    },
+    {
         fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_fzo2pocs'}],
         model: 'ZM25TQ',
         vendor: 'Zemismart',
         description: 'Tubular motor',
         fromZigbee: [fz.tuya_cover, fz.ignore_basic_report],
         toZigbee: [tz.tuya_cover_control, tz.tuya_cover_options, tz.tuya_data_point_test],
+        exposes: [e.cover_position().setAccess('position', ea.STATE_SET)],
+    },
+    {
+        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_7eue9vhc'}],
+        model: 'ZM25RX-08/30',
+        vendor: 'Zemismart',
+        description: 'Tubular motor',
+        fromZigbee: [fz.tuya_cover, fz.ignore_basic_report],
+        toZigbee: [tz.tuya_cover_control, tz.tuya_cover_options],
         exposes: [e.cover_position().setAccess('position', ea.STATE_SET)],
     },
     {
@@ -217,7 +223,7 @@ module.exports = [
         },
     },
     {
-        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_9mahtqtg'}],
+        fingerprint: [{modelID: 'TS0601', manufacturerName: '_TZE200_9mahtqtg'}, {modelID: 'TS0601', manufacturerName: '_TZE200_r731zlxk'}],
         model: 'TB26-6',
         vendor: 'Zemismart',
         description: '6-gang smart wall switch',

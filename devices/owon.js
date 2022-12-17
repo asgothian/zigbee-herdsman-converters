@@ -7,6 +7,15 @@ const e = exposes.presets;
 const ea = exposes.access;
 
 const fzLocal = {
+    temperature: {
+        ...fz.temperature,
+        convert: (model, msg, publish, options, meta) => {
+            // https://github.com/Koenkk/zigbee2mqtt/issues/15173
+            if (msg.data.measuredValue < 32770) {
+                return fz.temperature.convert(model, msg, publish, options, meta);
+            }
+        },
+    },
     PC321_metering: {
         cluster: 'seMetering',
         type: ['attributeReport', 'readResponse'],
@@ -76,7 +85,24 @@ const fzLocal = {
         },
     },
 };
+
 module.exports = [
+    {
+        zigbeeModel: ['WSP402'],
+        model: 'WSP402',
+        vendor: 'OWON',
+        description: 'Smart plug',
+        fromZigbee: [fz.on_off, fz.metering],
+        toZigbee: [tz.on_off],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'seMetering']);
+            await reporting.onOff(endpoint);
+            await reporting.readMeteringMultiplierDivisor(endpoint);
+            await reporting.instantaneousDemand(endpoint, {min: 5, max: constants.repInterval.MINUTES_5, change: 2});
+        },
+        exposes: [e.switch(), e.power(), e.energy()],
+    },
     {
         zigbeeModel: ['WSP404'],
         model: 'WSP404',
@@ -123,8 +149,8 @@ module.exports = [
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint2 = device.getEndpoint(2);
             const endpoint3 = device.getEndpoint(3);
-            await reporting.bind(endpoint2, coordinatorEndpoint, ['msTemperatureMeasurement', 'msRelativeHumidity']);
-            await reporting.bind(endpoint3, coordinatorEndpoint, ['msIlluminanceMeasurement']);
+            await reporting.bind(endpoint2, coordinatorEndpoint, ['msIlluminanceMeasurement']);
+            await reporting.bind(endpoint3, coordinatorEndpoint, ['msTemperatureMeasurement', 'msRelativeHumidity']);
             device.powerSource = 'Battery';
             device.save();
         },
@@ -177,11 +203,11 @@ module.exports = [
         model: 'THS317-ET',
         vendor: 'OWON',
         description: 'Temperature sensor',
-        fromZigbee: [fz.temperature, fz.battery],
+        fromZigbee: [fzLocal.temperature, fz.battery],
         toZigbee: [],
         exposes: [e.battery(), e.temperature()],
         configure: async (device, coordinatorEndpoint, logger) => {
-            const endpoint = device.getEndpoint(3);
+            const endpoint = device.getEndpoint(3) || device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ['msTemperatureMeasurement', 'genPowerCfg']);
             await reporting.temperature(endpoint);
             await reporting.batteryVoltage(endpoint);
@@ -226,5 +252,73 @@ module.exports = [
             exposes.numeric('reactive_power_l2', ea.STATE).withUnit('VAr').withDescription('Phase 2 reactive power'),
             exposes.numeric('reactive_power_l3', ea.STATE).withUnit('VAr').withDescription('Phase 3 reactive power'),
         ],
+    },
+    {
+        zigbeeModel: ['PCT504'],
+        model: 'PCT504',
+        vendor: 'OWON',
+        description: 'HVAC fan coil',
+        fromZigbee: [fz.fan, fz.thermostat, fz.humidity, fz.occupancy, fz.legacy.hvac_user_interface],
+        toZigbee: [tz.fan_mode,
+            tz.thermostat_occupied_heating_setpoint, tz.thermostat_unoccupied_heating_setpoint,
+            tz.thermostat_occupied_cooling_setpoint, tz.thermostat_unoccupied_cooling_setpoint,
+            tz.thermostat_min_heat_setpoint_limit, tz.thermostat_max_heat_setpoint_limit,
+            tz.thermostat_min_cool_setpoint_limit, tz.thermostat_max_cool_setpoint_limit,
+            tz.thermostat_local_temperature,
+            tz.thermostat_keypad_lockout,
+            tz.thermostat_system_mode, tz.thermostat_running_mode, tz.thermostat_running_state, tz.thermostat_programming_operation_mode],
+        exposes: [e.humidity(), e.occupancy(),
+            exposes.climate().withSystemMode(['off', 'heat', 'cool', 'fan_only', 'sleep']).withLocalTemperature()
+                .withRunningMode(['off', 'heat', 'cool'])
+                .withRunningState(['idle', 'heat', 'cool', 'fan_only'])
+                .withSetpoint('occupied_heating_setpoint', 5, 30, 0.5).withSetpoint('unoccupied_heating_setpoint', 5, 30, 0.5)
+                .withSetpoint('occupied_cooling_setpoint', 7, 35, 0.5).withSetpoint('unoccupied_cooling_setpoint', 7, 35, 0.5),
+            e.fan().withModes(['low', 'medium', 'high', 'on', 'auto']),
+            e.programming_operation_mode(['setpoint', 'eco']), e.keypad_lockout(),
+            e.max_heat_setpoint_limit(5, 30, 0.5), e.min_heat_setpoint_limit(5, 30, 0.5),
+            e.max_cool_setpoint_limit(7, 35, 0.5), e.min_cool_setpoint_limit(7, 35, 0.5)],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            const binds = ['genBasic', 'genIdentify', 'genGroups', 'hvacThermostat', 'hvacUserInterfaceCfg', 'hvacFanCtrl',
+                'msTemperatureMeasurement', 'msOccupancySensing'];
+            await reporting.bind(endpoint, coordinatorEndpoint, binds);
+            await reporting.fanMode(endpoint);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['hvacThermostat']);
+            await reporting.thermostatOccupiedHeatingSetpoint(endpoint);
+            await reporting.thermostatUnoccupiedHeatingSetpoint(endpoint);
+            await reporting.thermostatOccupiedCoolingSetpoint(endpoint);
+            await reporting.thermostatUnoccupiedCoolingSetpoint(endpoint);
+            await reporting.thermostatTemperature(endpoint, {min: 60, max: 600, change: 0.1});
+            await reporting.thermostatSystemMode(endpoint);
+            await reporting.thermostatRunningMode(endpoint);
+            await reporting.thermostatRunningState(endpoint);
+            await reporting.humidity(endpoint, {min: 60, max: 600, change: 1});
+            await reporting.thermostatKeypadLockMode(endpoint);
+
+            await endpoint.read('hvacThermostat', ['systemMode', 'runningMode', 'runningState',
+                'occupiedHeatingSetpoint', 'unoccupiedHeatingSetpoint',
+                'occupiedCoolingSetpoint', 'unoccupiedCoolingSetpoint', 'localTemp']);
+            await endpoint.read('msRelativeHumidity', ['measuredValue']);
+
+            const endpoint2 = device.getEndpoint(2);
+            await reporting.bind(endpoint2, coordinatorEndpoint, ['msOccupancySensing']);
+            await reporting.occupancy(endpoint2, {min: 1, max: 600, change: 1});
+            await endpoint2.read('msOccupancySensing', ['occupancy']);
+        },
+    },
+    {
+        zigbeeModel: ['PIR323-PTH'],
+        model: 'PIR323-PTH',
+        vendor: 'OWON',
+        description: 'Multi-sensor',
+        fromZigbee: [fz.battery, fz.ignore_basic_report, fz.ias_occupancy_alarm_1, fz.temperature, fz.humidity, fz.occupancy_timeout],
+        toZigbee: [],
+        exposes: [e.occupancy(), e.battery_low(), e.temperature(), e.humidity()],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(2);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['msTemperatureMeasurement', 'msRelativeHumidity']);
+            device.powerSource = 'Battery';
+            device.save();
+        },
     },
 ];

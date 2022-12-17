@@ -2,6 +2,7 @@ const exposes = require('../lib/exposes');
 const globalStore = require('../lib/store');
 const ota = require('../lib/ota');
 const extend = require('../lib/extend');
+const reporting = require('../lib/reporting');
 const utils = require('../lib/utils');
 const tz = require('../converters/toZigbee');
 const e = exposes.presets;
@@ -331,6 +332,14 @@ module.exports = [
         extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [158, 495]}),
     },
     {
+        zigbeeModel: ['GL-S-006P'],
+        model: 'GL-S-006P',
+        vendor: 'Gledopto',
+        ota: ota.zigbeeOTA,
+        description: 'Zigbee GU10 LED lamp',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [158, 495]}),
+    },
+    {
         zigbeeModel: ['GL-MC-001P'],
         model: 'GL-MC-001P',
         vendor: 'Gledopto',
@@ -476,6 +485,14 @@ module.exports = [
         extend: gledoptoExtend.light_onoff_brightness_colortemp_color(),
     },
     {
+        zigbeeModel: ['GL-D-002P'],
+        model: 'GL-D-002P',
+        vendor: 'Gledopto',
+        ota: ota.zigbeeOTA,
+        description: 'Zigbee 6W Downlight RGB+CCT (pro CRI>90)',
+        extend: gledoptoExtend.light_onoff_brightness_colortemp_color({colorTempRange: [158, 495]}),
+    },
+    {
         zigbeeModel: ['GL-D-003Z'],
         model: 'GL-D-003Z',
         vendor: 'Gledopto',
@@ -586,6 +603,21 @@ module.exports = [
         extend: gledoptoExtend.light_onoff_brightness_colortemp_color(),
     },
     {
+        zigbeeModel: ['GL-C-004P'],
+        model: 'GL-C-004P',
+        vendor: 'Gledopto',
+        description: 'Zigbee LED Strip Light Kit',
+        extend: gledoptoExtend.light_onoff_brightness_colortemp({noConfigure: true, colorTempRange: [158, 495]}),
+        configure: async (device, coordinatorEndpoint, logger) => {
+            await extend.light_onoff_brightness_colortemp().configure(device, coordinatorEndpoint, logger);
+            const endpoint = device.getEndpoint(11);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl', 'lightingColorCtrl']);
+            await reporting.onOff(endpoint);
+            await reporting.brightness(endpoint);
+            await reporting.colorTemperature(endpoint);
+        },
+    },
+    {
         zigbeeModel: ['GL-FL-001P'],
         model: 'GL-FL-001P',
         vendor: 'Gledopto',
@@ -657,6 +689,14 @@ module.exports = [
         vendor: 'Gledopto',
         ota: ota.zigbeeOTA,
         description: 'Zigbee 12W Garden Lamp RGB+CCT (pro)',
+        extend: gledoptoExtend.light_onoff_brightness_colortemp_color(),
+    },
+    {
+        zigbeeModel: ['GL-G-101P'],
+        model: 'GL-G-101P',
+        vendor: 'Gledopto',
+        ota: ota.zigbeeOTA,
+        description: 'Zigbee 12W garden lamp RGB+CCT (pro)',
         extend: gledoptoExtend.light_onoff_brightness_colortemp_color(),
     },
     {

@@ -61,9 +61,8 @@ const local = {
                 if (!operationModeLookup.hasOwnProperty(value)) {
                     throw new Error(`operation_mode was called with an invalid value (${value})`);
                 } else {
-                    const operationModeProperty = `operation_mode${meta.endpoint_name ? `_${meta.endpoint_name}` : ''}`;
                     await entity.write('manuSpecificNiko1', {'switchOperationMode': operationModeLookup[value]});
-                    return {state: {[operationModeProperty]: value.toLowerCase()}};
+                    return {state: {operation_mode: value.toLowerCase()}};
                 }
             },
             convertGet: async (entity, key, meta) => {
@@ -130,6 +129,29 @@ module.exports = [
             e.energy().withAccess(ea.STATE_GET),
             exposes.binary('child_lock', ea.ALL, 'LOCK', 'UNLOCK').withDescription('Enables/disables physical input on the device'),
             exposes.binary('led_enable', ea.ALL, true, false).withDescription('Enable LED'),
+        ],
+    },
+    {
+        zigbeeModel: ['Smart plug Zigbee SE'],
+        model: '552-80698',
+        vendor: 'Niko',
+        description: 'Smart plug with side earthing pin',
+        fromZigbee: [fz.on_off, fz.electrical_measurement, fz.metering, fz.power_on_behavior],
+        toZigbee: [tz.on_off, tz.power_on_behavior, tz.electrical_measurement_power, tz.currentsummdelivered],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'haElectricalMeasurement', 'seMetering']);
+            await reporting.onOff(endpoint);
+            // only activePower seems to be support, although compliance document states otherwise
+            await endpoint.read('haElectricalMeasurement', ['acPowerMultiplier', 'acPowerDivisor']);
+            await reporting.activePower(endpoint);
+            await reporting.readMeteringMultiplierDivisor(endpoint);
+            await reporting.currentSummDelivered(endpoint, {min: 60, change: 1});
+        },
+        exposes: [
+            e.switch(), e.power().withAccess(ea.STATE_GET), e.energy().withAccess(ea.STATE_GET),
+            exposes.enum('power_on_behavior', ea.ALL, ['off', 'previous', 'on'])
+                .withDescription('Controls the behaviour when the device is powered on'),
         ],
     },
     {

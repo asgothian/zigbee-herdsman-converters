@@ -34,6 +34,7 @@ const fzLocal = {
                 case 14: {
                     const batteryLevels = {0: 'low', 1: 'middle', 2: 'high'};
                     result.battery_level = batteryLevels[value];
+                    result.battery_low = value === 0;
                     break;
                 }
                 case 16:
@@ -106,6 +107,7 @@ module.exports = [
         onEvent: tuya.onEventSetTime,
         exposes: [e.switch(), e.battery()],
         meta: {disableDefaultResponse: true},
+        configure: tuya.configureMagicPacket,
     },
     {
         fingerprint: [{modelID: 'TS0505A', manufacturerName: '_TZ3000_keabpigv'}],
@@ -153,7 +155,8 @@ module.exports = [
         onEvent: tuya.onEventsetTime,
     },
     {
-        fingerprint: [{modelID: 'TS0219', manufacturerName: '_TYZB01_ynsiasng'}, {modelID: 'TS0219', manufacturerName: '_TYZB01_bwsijaty'}],
+        fingerprint: [{modelID: 'TS0219', manufacturerName: '_TYZB01_ynsiasng'}, {modelID: 'TS0219', manufacturerName: '_TYZB01_bwsijaty'},
+            {modelID: 'TS0219', manufacturerName: '_TYZB01_rs7ff6o7'}],
         model: 'R7051',
         vendor: 'Woox',
         description: 'Smart siren',

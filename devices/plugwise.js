@@ -116,10 +116,9 @@ module.exports = [
         model: '106-03',
         vendor: 'Plugwise',
         description: 'Tom thermostatic radiator valve',
-        fromZigbee: [fz.thermostat, fz.temperature, fz.battery, fzLocal.plugwise_radiator_valve],
+        fromZigbee: [fz.temperature, fz.battery, fzLocal.plugwise_radiator_valve],
+        // sytem_mode and occupied_heating_setpoint is not supported: https://github.com/Koenkk/zigbee2mqtt.io/pull/1666
         toZigbee: [
-            tz.thermostat_system_mode,
-            tz.thermostat_occupied_heating_setpoint,
             tz.thermostat_pi_heating_demand,
             tzLocal.plugwise_valve_position,
             tzLocal.plugwise_push_force,
@@ -134,10 +133,9 @@ module.exports = [
             await reporting.thermostatPIHeatingDemand(endpoint);
         },
         exposes: [e.battery(),
-            exposes.climate()
-                .withSetpoint('occupied_heating_setpoint', 5, 30, 0.5, ea.ALL).withLocalTemperature(ea.STATE)
-                .withSystemMode(['off', 'auto'], ea.ALL)
-                .withPiHeatingDemand(ea.STATE_GET),
+            exposes.numeric('pi_heating_demand', ea.STATE_GET).withValueMin(0).withValueMax(100).withUnit('%')
+                .withDescription('Position of the valve (= demanded heat) where 0% is fully closed and 100% is fully open'),
+            exposes.numeric('local_temperature', ea.STATE).withUnit('°C').withDescription('Current temperature measured on the device'),
             exposes.numeric('valve_position', ea.ALL).withValueMin(0).withValueMax(100)
                 .withDescription('Directly control the radiator valve. The values range from 0 (valve ' +
                     'closed) to 100 (valve fully open)'),
@@ -147,6 +145,29 @@ module.exports = [
                 .withDescription('Transmits with higher power when range is not sufficient'),
             exposes.binary('calibrate_valve', ea.STATE_SET, 'calibrate', 'idle')
                 .withDescription('Calibrates valve on next wakeup'),
+        ],
+    },
+    {
+        zigbeeModel: ['158-01'],
+        model: '158-01',
+        vendor: 'Plugwise',
+        description: 'Lisa zone thermostat',
+        fromZigbee: [fz.thermostat, fz.temperature, fz.battery],
+        toZigbee: [
+            tz.thermostat_system_mode,
+            tz.thermostat_occupied_heating_setpoint,
+        ],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genBasic', 'genPowerCfg', 'hvacThermostat']);
+            await reporting.batteryPercentageRemaining(endpoint);
+            await reporting.thermostatTemperature(endpoint);
+        },
+        exposes: [e.battery(),
+            exposes.climate()
+                .withSetpoint('occupied_heating_setpoint', 5, 30, 0.5, ea.ALL)
+                .withLocalTemperature(ea.STATE)
+                .withSystemMode(['off', 'auto'], ea.ALL),
         ],
     },
 ];

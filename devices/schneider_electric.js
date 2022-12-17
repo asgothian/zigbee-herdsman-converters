@@ -28,7 +28,7 @@ const fzLocal = {
             }
 
             const commandID = msg.data.commandID;
-            if (utils.hasAlreadyProcessedMessage(msg, msg.data.frameCounter, `${msg.device.ieeeAddr}_${commandID}`)) return;
+            if (utils.hasAlreadyProcessedMessage(msg, model, msg.data.frameCounter, `${msg.device.ieeeAddr}_${commandID}`)) return;
 
             const rxAfterTx = (msg.data.options & (1<<11));
             const ret = {};
@@ -213,7 +213,7 @@ module.exports = [
             fz.legacy.wiser_thermostat, fz.legacy.wiser_itrv_battery, fz.hvac_user_interface, fz.wiser_device_info],
         toZigbee: [tz.thermostat_occupied_heating_setpoint, tz.thermostat_keypad_lockout],
         exposes: [exposes.climate().withSetpoint('occupied_heating_setpoint', 7, 30, 1).withLocalTemperature(ea.STATE)
-            .withSystemMode(['off', 'auto', 'heat'], ea.STATE).withRunningState(['idle', 'heat'], ea.STATE).withPiHeatingDemand()],
+            .withRunningState(['idle', 'heat'], ea.STATE).withPiHeatingDemand()],
         configure: async (device, coordinatorEndpoint, logger) => {
             const endpoint = device.getEndpoint(1);
             const binds = ['genBasic', 'genPowerCfg', 'hvacThermostat', 'haDiagnostic'];
@@ -255,8 +255,8 @@ module.exports = [
         model: 'CCT5010-0001',
         vendor: 'Schneider Electric',
         description: 'Micro module dimmer',
-        fromZigbee: [fz.on_off, fz.brightness, fz.level_config, fz.wiser_lighting_ballast_configuration],
-        toZigbee: [tz.light_onoff_brightness, tz.level_config, tz.ballast_config, tz.wiser_dimmer_mode],
+        fromZigbee: [...extend.light_onoff_brightness().fromZigbee, fz.wiser_lighting_ballast_configuration],
+        toZigbee: [...extend.light_onoff_brightness().toZigbee, tz.ballast_config, tz.wiser_dimmer_mode],
         exposes: [e.light_brightness().withLevelConfig(),
             exposes.numeric('ballast_minimum_level', ea.ALL).withValueMin(1).withValueMax(254)
                 .withDescription('Specifies the minimum light output of the ballast'),
@@ -289,6 +289,27 @@ module.exports = [
     {
         zigbeeModel: ['NHROTARY/DIMMER/1'],
         model: 'WDE002334',
+        vendor: 'Schneider Electric',
+        description: 'Rotary dimmer',
+        fromZigbee: [fz.on_off, fz.brightness, fz.level_config, fz.wiser_lighting_ballast_configuration],
+        toZigbee: [tz.light_onoff_brightness, tz.level_config, tz.ballast_config, tz.wiser_dimmer_mode],
+        exposes: [e.light_brightness().withLevelConfig(),
+            exposes.numeric('ballast_minimum_level', ea.ALL).withValueMin(1).withValueMax(254)
+                .withDescription('Specifies the minimum light output of the ballast'),
+            exposes.numeric('ballast_maximum_level', ea.ALL).withValueMin(1).withValueMax(254)
+                .withDescription('Specifies the maximum light output of the ballast'),
+            exposes.enum('dimmer_mode', ea.ALL, ['auto', 'rc', 'rl', 'rl_led'])
+                .withDescription('Sets dimming mode to autodetect or fixed RC/RL/RL_LED mode (max load is reduced in RL_LED)')],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(3);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl', 'lightingBallastCfg']);
+            await reporting.onOff(endpoint);
+            await reporting.brightness(endpoint);
+        },
+    },
+    {
+        zigbeeModel: ['NHROTARY/UNIDIM/1'],
+        model: 'WDE002961',
         vendor: 'Schneider Electric',
         description: 'Rotary dimmer',
         fromZigbee: [fz.on_off, fz.brightness, fz.level_config, fz.wiser_lighting_ballast_configuration],
@@ -423,7 +444,7 @@ module.exports = [
         description: 'Odace connectable relay switch 10A',
         extend: extend.switch(),
         configure: async (device, coordinatorEndpoint, logger) => {
-            const endpoint = device.getEndpoint(10);
+            const endpoint = device.getEndpoint(21);
             await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
             await reporting.onOff(endpoint);
         },
@@ -462,6 +483,18 @@ module.exports = [
             const endpoint = device.getEndpoint(1) || device.getEndpoint(5);
             await reporting.bind(endpoint, coordinatorEndpoint, ['closuresWindowCovering']);
             await reporting.currentPositionLiftPercentage(endpoint);
+        },
+    },
+    {
+        zigbeeModel: ['1GANG/SWITCH/1'],
+        model: 'MEG5161-0000',
+        vendor: 'Schneider Electric',
+        description: 'Merten PlusLink relay insert with Merten Wiser system M push button (1fold)',
+        extend: extend.switch(),
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff']);
+            await reporting.onOff(endpoint);
         },
     },
     {
@@ -747,16 +780,23 @@ module.exports = [
         zigbeeModel: ['FLS/SYSTEM-M/4'],
         model: 'WDE002906',
         vendor: 'Schneider Electric',
-        description: 'Wiser wireless switch 1-gang',
+        description: 'Wiser wireless switch 1-gang or 2-gang',
         fromZigbee: [fz.command_on, fz.command_off, fz.command_move, fz.command_stop, fz.battery],
         toZigbee: [],
-        exposes: [e.action(['on', 'off', 'brightness_move_up', 'brightness_move_down', 'brightness_stop']),
-            e.battery()],
-        meta: {disableActionGroup: true},
+        endpoint: (device) => {
+            return {'right': 21, 'left': 22};
+        },
+        meta: {multiEndpoint: true},
+        exposes: [e.action(['on_left', 'off_left', 'on_right', 'off_right', 'brightness_move_up_left', 'brightness_stop_left',
+            'brightness_move_down_left', 'brightness_stop_left', 'brightness_move_up_right', 'brightness_stop_right',
+            'brightness_move_down_right', 'brightness_stop_right']), e.battery()],
         configure: async (device, coordinatorEndpoint, logger) => {
-            const endpoint = device.getEndpoint(21);
-            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl', 'genPowerCfg']);
-            await reporting.batteryPercentageRemaining(endpoint);
+            // When in 2-gang operation mode, unit operates out of endpoints 21 and 22, otherwise just 21
+            const leftButtonsEndpoint = device.getEndpoint(21);
+            await reporting.bind(leftButtonsEndpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl', 'genPowerCfg']);
+            const rightButtonsEndpoint = device.getEndpoint(22);
+            await reporting.bind(rightButtonsEndpoint, coordinatorEndpoint, ['genOnOff', 'genLevelCtrl']);
+            await reporting.batteryPercentageRemaining(leftButtonsEndpoint);
         },
     },
     {

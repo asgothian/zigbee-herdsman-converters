@@ -7,6 +7,7 @@ const e = exposes.presets;
 const ea = exposes.access;
 const tuya = require('../lib/tuya');
 const globalStore = require('../lib/store');
+const ota = require('../lib/ota');
 
 const tuyaLocal = {
     dataPoints: {
@@ -379,12 +380,42 @@ module.exports = [
         },
     },
     {
+        fingerprint: [
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_j1v25l17'}, // EU
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ynmowqk2'}, // FR
+        ],
+        model: 'HG08673',
+        vendor: 'Lidl',
+        description: 'Silvercrest smart plug with power monitoring (EU, FR)',
+        ota: ota.zigbeeOTA,
+        extend: tuya.extend.switch({electricalMeasurements: true, powerOutageMemory: true, indicatorMode: true, childLock: true}),
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await tuya.configureMagicPacket(device, coordinatorEndpoint, logger);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff', 'haElectricalMeasurement']);
+            await reporting.rmsVoltage(endpoint, {change: 5});
+            await reporting.rmsCurrent(endpoint, {change: 50});
+            await reporting.activePower(endpoint, {change: 10});
+            // Energy reporting (currentSummDelivered) doesn't work; requires polling: https://github.com/Koenkk/zigbee2mqtt/issues/14356
+            endpoint.saveClusterAttributeKeyValue('haElectricalMeasurement', {acCurrentDivisor: 1000, acCurrentMultiplier: 1});
+            endpoint.saveClusterAttributeKeyValue('seMetering', {divisor: 100, multiplier: 1});
+            device.save();
+        },
+        options: [exposes.options.measurement_poll_interval().withDescription('Only the energy value is polled for this device.')],
+        onEvent: (type, data, device, options) => tuya.onEventMeasurementPoll(type, data, device, options, false, true),
+    },
+    {
         fingerprint: [{modelID: 'TS004F', manufacturerName: '_TZ3000_rco1yzb1'}],
         model: 'HG08164',
         vendor: 'Lidl',
         description: 'Silvercrest smart button',
         fromZigbee: [fz.command_on, fz.command_off, fz.command_step, fz.command_stop, fz.battery],
         toZigbee: [],
+        configure: async (device, coordinatorEndpoint, logger) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ['genPowerCfg']);
+            await reporting.batteryPercentageRemaining(endpoint);
+        },
         exposes: [e.action(['on', 'off', 'brightness_stop', 'brightness_step_up', 'brightness_step_down']), e.battery()],
     },
     {
@@ -465,8 +496,7 @@ module.exports = [
         extend: extend.switch(),
         meta: {multiEndpoint: true},
         configure: async (device, coordinatorEndpoint, logger) => {
-            const endpoint = device.getEndpoint(1);
-            await endpoint.read('genBasic', ['manufacturerName', 'zclVersion', 'appVersion', 'modelId', 'powerSource', 0xfffe]);
+            await tuya.configureMagicPacket(device, coordinatorEndpoint, logger);
             for (const ID of [1, 2, 3]) {
                 await reporting.bind(device.getEndpoint(ID), coordinatorEndpoint, ['genOnOff']);
             }
@@ -562,6 +592,14 @@ module.exports = [
         },
     },
     {
+        fingerprint: [{modelID: 'TS0505B', manufacturerName: '_TZ3210_zbabx9wh'}],
+        model: 'HG08007',
+        vendor: 'TuYa',
+        description: 'Livarno Home outdoor LED band',
+        extend: extend.light_onoff_brightness_colortemp_color({colorTempRange: [153, 500], disableColorTempStartup: true}),
+        meta: {applyRedFix: true, enhancedHue: false},
+    },
+    {
         fingerprint: [{modelID: 'TS0505B', manufacturerName: '_TZ3210_z1vlyufu'}],
         model: '14158704L',
         vendor: 'Lidl',
@@ -633,7 +671,7 @@ module.exports = [
         model: 'HG06106C',
         vendor: 'Lidl',
         description: 'Livarno Lux E27 bulb RGB',
-        ...extend.light_onoff_brightness_colortemp_color({disableColorTempStartup: true}),
+        ...extend.light_onoff_brightness_colortemp_color({disableColorTempStartup: true, disablePowerOnBehavior: true}),
         meta: {applyRedFix: true, enhancedHue: false},
         configure: async (device, coordinatorEndpoint, logger) => {
             device.getEndpoint(1).saveClusterAttributeKeyValue('lightingColorCtrl', {colorCapabilities: 29});
@@ -681,7 +719,8 @@ module.exports = [
         },
     },
     {
-        fingerprint: [{modelID: 'TS0502A', manufacturerName: '_TZ3000_rylaozuc'}],
+        fingerprint: [{modelID: 'TS0502A', manufacturerName: '_TZ3000_rylaozuc'},
+            {modelID: 'TS0502A', manufacturerName: '_TZ3000_5fkufhn1'}],
         model: '14147206L',
         vendor: 'Lidl',
         description: 'Livarno Lux ceiling light',
