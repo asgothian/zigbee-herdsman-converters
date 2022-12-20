@@ -1526,13 +1526,13 @@ const converters = {
     metering_power: {
         key: ['power'],
         convertGet: async (entity, key, meta) => {
-            await entity.read('seMetering', ['instantaneousDemand']);
+            await utils.enforceEndpoint(entity, key, meta).read('seMetering', ['instantaneousDemand']);
         },
     },
     currentsummdelivered: {
         key: ['energy'],
         convertGet: async (entity, key, meta) => {
-            await entity.read('seMetering', ['currentSummDelivered']);
+            await utils.enforceEndpoint(entity, key, meta).read('seMetering', ['currentSummDelivered']);
         },
     },
     frequency: {
@@ -5515,6 +5515,9 @@ const converters = {
                 } else if (attribute === 'brightness') {
                     extensionfieldsets.push({'clstId': 8, 'len': 1, 'extField': [val]});
                     state['brightness'] = val;
+                } else if (attribute === 'position') {
+                    extensionfieldsets.push({'clstId': 258, 'len': 1, 'extField': [val]});
+                    state['position'] = val;
                 } else if (attribute === 'color_temp') {
                     /*
                      * ZCL version 7 added support for ColorTemperatureMireds
