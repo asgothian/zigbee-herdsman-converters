@@ -811,6 +811,13 @@ module.exports = [
         extend: hueExtend.light_onoff_brightness(),
     },
     {
+        zigbeeModel: ['LWA021'],
+        model: '9290030514',
+        vendor: 'Philips',
+        description: 'Hue Filament Standard A60/E27 bluetooth',
+        extend: hueExtend.light_onoff_brightness(),
+    },
+    {
         zigbeeModel: ['LCB001'],
         model: '548727',
         vendor: 'Philips',
@@ -1430,7 +1437,7 @@ module.exports = [
         zigbeeModel: ['3261331P6', '929003055301'],
         model: '3261331P6',
         vendor: 'Philips',
-        description: 'Hue white ambiance Still',
+        description: 'Hue white ambiance Still (white)',
         extend: hueExtend.light_onoff_brightness_colortemp({colorTempRange: [153, 454]}),
     },
     {
@@ -1448,10 +1455,17 @@ module.exports = [
         extend: hueExtend.light_onoff_brightness_colortemp({colorTempRange: [153, 454]}),
     },
     {
+        zigbeeModel: ['929003055401'],
+        model: '929003055401',
+        vendor: 'Philips',
+        description: 'Hue white ambiance Still (aluminium)',
+        extend: hueExtend.light_onoff_brightness_colortemp({colorTempRange: [153, 454]}),
+    },
+    {
         zigbeeModel: ['929003055501'],
         model: '929003055501',
         vendor: 'Philips',
-        description: 'Hue white ambiance Still',
+        description: 'Hue white ambiance Still (black)',
         extend: hueExtend.light_onoff_brightness_colortemp({colorTempRange: [153, 454]}),
     },
     {
