@@ -19,7 +19,7 @@ jobs:
         echo "::set-output name=version::$(node --version)"
     - name: Restore node_modules cache
       id: cache-node-modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: node_modules
         key: ${{ runner.os }}-${{ steps.nodeversion.outputs.version }}-${{ hashFiles('package-lock.json') }}
