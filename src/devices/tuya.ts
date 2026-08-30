@@ -4398,7 +4398,7 @@ export const definitions: DefinitionWithExtend[] = [
         vendor: "Tuya",
         description: "Zigbee RGBW light",
         toZigbee: [tzLocal.TS0504B_color],
-        extend: [tuya.modernExtend.tuyaLight({color: true})],
+        extend: [tuya.modernExtend.tuyaLight({colorTemp: {range: [454, 500], startup: false}, color: true})],
     },
     {
         zigbeeModel: ["TS0501A"],
@@ -30419,6 +30419,61 @@ export const definitions: DefinitionWithExtend[] = [
                 // DP 116 (value), 132 (value, mirrors 102) and 133 (raw colour) also exist on this
                 // device, but their meaning is unconfirmed and they may be output configuration
                 // parameters, so they are deliberately left out rather than guessed at.
+            ],
+        },
+    },
+    {
+        zigbeeModel: ["ZG-227ZP", "ZG-227ZH"],
+        model: "ZG-227ZP",
+        vendor: "HOBEIAN",
+        description: "Temperature(NTC) & humidity sensor",
+        extend: [tuya.modernExtend.tuyaBase({dp: true})],
+        exposes: [
+            e.numeric("ntc_temperature", ea.STATE).withUnit("°C").withDescription("External NTC temperature"),
+            e.temperature(),
+            e.humidity(),
+            e.enum("ntc_alarm", ea.STATE, ["loweralarm", "upperalarm", "cancel"]).withDescription("NTC temperature alarm"),
+            e
+                .numeric("ntc_temperature_calibration", ea.STATE_SET)
+                .withValueMin(-5.0)
+                .withValueMax(5.0)
+                .withValueStep(0.1)
+                .withUnit("°C")
+                .withDescription("NTC temperature calibration"),
+            tuya.exposes.temperatureUnit(),
+            tuya.exposes.temperatureCalibration(),
+            tuya.exposes.humidityCalibration(),
+            tuya.exposes.temperatureSampling(),
+            e
+                .numeric("ntc_high_temp_alarm_threshold", ea.STATE_SET)
+                .withValueMin(-20.0)
+                .withValueMax(130.0)
+                .withValueStep(0.1)
+                .withUnit("°C")
+                .withDescription("NTC high temp alarm threshold"),
+            e
+                .numeric("ntc_low_temp_alarm_threshold", ea.STATE_SET)
+                .withValueMin(-20.0)
+                .withValueMax(130.0)
+                .withValueStep(0.1)
+                .withUnit("°C")
+                .withDescription("NTC high temp alarm threshold"),
+            e.battery(),
+        ],
+        meta: {
+            tuyaDatapoints: [
+                [1, "temperature", tuya.valueConverter.divideBy10],
+                [2, "humidity", tuya.valueConverter.raw],
+                [9, "temperature_unit", tuya.valueConverter.temperatureUnit],
+                [4, "battery", tuya.valueConverter.raw],
+                [6, "temperature_sampling", tuya.valueConverter.raw],
+                [23, "temperature_calibration", tuya.valueConverter.divideBy10],
+                [24, "humidity_calibration", tuya.valueConverter.raw],
+                [104, "ntc_temperature_calibration", tuya.valueConverter.divideBy10],
+                [10, "ntc_high_temp_alarm_threshold", tuya.valueConverter.divideBy10],
+                [11, "ntc_low_temp_alarm_threshold", tuya.valueConverter.divideBy10],
+                [14, "ntc_alarm", tuya.valueConverterBasic.lookup({loweralarm: tuya.enum(0), upperalarm: tuya.enum(1), cancel: tuya.enum(2)})],
+                [105, "ntc_temperature", tuya.valueConverter.divideBy10],
             ],
         },
     },
