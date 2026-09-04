@@ -45,7 +45,7 @@
     "dependencies": {
         "iconv-lite": "^0.7.3",
         "semver": "^7.8.5",
-        "zigbee-herdsman": "^10.9.0"
+        "zigbee-herdsman": "^10.9.1"
     },
     "exports": {
         ".": "./dist/index.js",
@@ -55,8 +55,8 @@
         "./package.json": "./package.json"
     },
     "devDependencies": {
-        "@biomejs/biome": "^2.5.3",
-        "@types/node": "^26.2.0",
+        "@biomejs/biome": "^2.5.11",
+        "@types/node": "^26.4.1",
         "@types/semver": "^7.8.0",
         "@vitest/coverage-v8": "4.1.11",
         "fast-deep-equal": "^3.1.3",
