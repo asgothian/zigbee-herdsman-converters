@@ -11,8 +11,10 @@ import {definitions as akuvox} from "./akuvox";
 import {definitions as alchemy} from "./alchemy";
 import {definitions as aldi} from "./aldi";
 import {definitions as alecto} from "./alecto";
+import {definitions as allesin} from "./allesin";
 import {definitions as amina} from "./amina";
 import {definitions as anchor} from "./anchor";
+import {definitions as ariston} from "./ariston";
 import {definitions as atlantic} from "./atlantic";
 import {definitions as atsmart} from "./atsmart";
 import {definitions as auroraLighting} from "./aurora_lighting";
@@ -22,8 +24,10 @@ import {definitions as awox} from "./awox";
 import {definitions as axis} from "./axis";
 import {definitions as bacchus} from "./bacchus";
 import {definitions as bankamp} from "./bankamp";
+import {definitions as beca} from "./beca";
 import {definitions as bega} from "./bega";
 import {definitions as belkin} from "./belkin";
+import {definitions as besisglas} from "./besisglas";
 import {definitions as bitron} from "./bitron";
 import {definitions as bituoTechnik} from "./bituo_technik";
 import {definitions as blaupunkt} from "./blaupunkt";
@@ -49,6 +53,7 @@ import {definitions as cleode} from "./cleode";
 import {definitions as cleverio} from "./cleverio";
 import {definitions as climax} from "./climax";
 import {definitions as commercialElectric} from "./commercial_electric";
+import {definitions as coselig} from "./coselig";
 import {definitions as cree} from "./cree";
 import {definitions as ctm} from "./ctm";
 import {definitions as currentProductsCorp} from "./current_products_corp";
@@ -105,6 +110,7 @@ import {definitions as ezviz} from "./ezviz";
 import {definitions as fantem} from "./fantem";
 import {definitions as feibit} from "./feibit";
 import {definitions as fireangel} from "./fireangel";
+import {definitions as fontastic} from "./fontastic";
 import {definitions as frankever} from "./frankever";
 import {definitions as frient} from "./frient";
 import {definitions as futurehome} from "./futurehome";
@@ -212,6 +218,7 @@ import {definitions as megaman} from "./megaman";
 import {definitions as mercator} from "./mercator";
 import {definitions as miboxer} from "./miboxer";
 import {definitions as micromatic} from "./micromatic";
+import {definitions as miele} from "./miele";
 import {definitions as mill} from "./mill";
 import {definitions as mindy} from "./mindy";
 import {definitions as modular} from "./modular";
@@ -331,6 +338,7 @@ import {definitions as spotmau} from "./spotmau";
 import {definitions as sprut} from "./sprut";
 import {definitions as stello} from "./stello";
 import {definitions as stelpro} from "./stelpro";
+import {definitions as streda} from "./streda";
 import {definitions as stuckatprototype} from "./stuckatprototype";
 import {definitions as sunricher} from "./sunricher";
 import {definitions as superled} from "./superled";
@@ -342,6 +350,7 @@ import {definitions as tci} from "./tci";
 import {definitions as tcl} from "./tcl";
 import {definitions as tech} from "./tech";
 import {definitions as technicolor} from "./technicolor";
+import {definitions as teelicht} from "./teelicht";
 import {definitions as teploluxe} from "./teploluxe";
 import {definitions as terncy} from "./terncy";
 import {definitions as theLightGroup} from "./the_light_group";
@@ -406,8 +415,10 @@ const definitions: DefinitionWithExtend[] = [
     ...alchemy,
     ...aldi,
     ...alecto,
+    ...allesin,
     ...amina,
     ...anchor,
+    ...ariston,
     ...atlantic,
     ...atsmart,
     ...auroraLighting,
@@ -417,8 +428,10 @@ const definitions: DefinitionWithExtend[] = [
     ...axis,
     ...bacchus,
     ...bankamp,
+    ...beca,
     ...bega,
     ...belkin,
+    ...besisglas,
     ...bitron,
     ...bituoTechnik,
     ...blaupunkt,
@@ -444,6 +457,7 @@ const definitions: DefinitionWithExtend[] = [
     ...cleverio,
     ...climax,
     ...commercialElectric,
+    ...coselig,
     ...cree,
     ...ctm,
     ...currentProductsCorp,
@@ -499,6 +513,7 @@ const definitions: DefinitionWithExtend[] = [
     ...fantem,
     ...feibit,
     ...fireangel,
+    ...fontastic,
     ...frankever,
     ...frient,
     ...futurehome,
@@ -604,6 +619,7 @@ const definitions: DefinitionWithExtend[] = [
     ...mercator,
     ...miboxer,
     ...micromatic,
+    ...miele,
     ...mill,
     ...mindy,
     ...modular,
@@ -723,6 +739,7 @@ const definitions: DefinitionWithExtend[] = [
     ...sprut,
     ...stello,
     ...stelpro,
+    ...streda,
     ...stuckatprototype,
     ...sunricher,
     ...superled,
@@ -734,6 +751,7 @@ const definitions: DefinitionWithExtend[] = [
     ...tcl,
     ...tech,
     ...technicolor,
+    ...teelicht,
     ...teploluxe,
     ...terncy,
     ...theLightGroup,

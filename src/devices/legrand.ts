@@ -82,9 +82,9 @@ export const definitions: DefinitionWithExtend[] = [
             await reporting.readEletricalMeasurementMultiplierDivisors(endpoint);
             await reporting.activePower(endpoint);
             // Read configuration values that are not sent periodically as well as current power (activePower).
+            await endpoint.read("haElectricalMeasurement", [0xf000]);
             await endpoint.read<"haElectricalMeasurement", LegrandHaElectricalMeasurement>("haElectricalMeasurement", [
                 "activePower",
-                0xf000,
                 "powerAlarmEnabled",
                 "powerAlarmWhThreshold",
             ]);
@@ -294,6 +294,22 @@ export const definitions: DefinitionWithExtend[] = [
         },
     },
     {
+        // Leading space: the trimmed form catches any NUL-padded variant via normalizeModelID
+        zigbeeModel: [" Wired remote on / off switch", "Wired remote on / off switch"],
+        model: "WNRL24",
+        vendor: "Legrand",
+        description: "Wired remote smart switch with Netatmo",
+        ota: true,
+        meta: {publishDuplicateTransaction: true},
+        fromZigbee: [fz.identify, fz.command_on, fz.command_off, fz.command_toggle, fz.command_move, fz.command_stop],
+        toZigbee: [],
+        exposes: [e.action(["identify", "on", "off", "toggle", "brightness_move_up", "brightness_move_down", "brightness_stop"])],
+        configure: async (device, coordinatorEndpoint) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ["genIdentify", "genOnOff", "genLevelCtrl"]);
+        },
+    },
+    {
         zigbeeModel: [" Double gangs remote switch\u0000\u0000\u0000\u0000"],
         model: "067774",
         vendor: "Legrand",
@@ -443,6 +459,21 @@ export const definitions: DefinitionWithExtend[] = [
         },
     },
     {
+        zigbeeModel: [" Wired master SW Home / Away", "Wired master SW Home / Away"],
+        model: "WNRL34",
+        vendor: "Legrand",
+        description: "Wired home & away switch",
+        ota: true,
+        fromZigbee: [fzLegrand.scenes],
+        toZigbee: [],
+        extend: [legrandExtend.addLegrandDevicesCluster()],
+        exposes: [e.action(["enter", "leave", "sleep", "wakeup"])],
+        configure: async (device, coordinatorEndpoint) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ["genIdentify"]);
+        },
+    },
+    {
         zigbeeModel: [
             " 3 Phases power consumption module\u0000\u0000",
             " 3P power consumption module\u0000\u0000\u0000",
@@ -507,8 +538,8 @@ export const definitions: DefinitionWithExtend[] = [
                 // Some version/firmware don't seem to support this.
             }
             // Read configuration values that are not sent periodically.
+            await endpoint.read("haElectricalMeasurement", [0xf000]);
             await endpoint.read<"haElectricalMeasurement", LegrandHaElectricalMeasurement>("haElectricalMeasurement", [
-                0xf000,
                 "powerAlarmEnabled",
                 "powerAlarmWhThreshold",
             ]);
@@ -570,8 +601,8 @@ export const definitions: DefinitionWithExtend[] = [
                 // Some version/firmware don't seem to support this.
             }
             // Read configuration values that are not sent periodically.
+            await endpoint.read("haElectricalMeasurement", [0xf000]);
             await endpoint.read<"haElectricalMeasurement", LegrandHaElectricalMeasurement>("haElectricalMeasurement", [
-                0xf000,
                 "powerAlarmEnabled",
                 "powerAlarmWhThreshold",
             ]);
@@ -836,6 +867,22 @@ export const definitions: DefinitionWithExtend[] = [
         configure: async (device, coordinatorEndpoint) => {
             const endpoint = device.getEndpoint(1);
             await reporting.bind(endpoint, coordinatorEndpoint, ["genIdentify", "genScenes"]);
+        },
+    },
+    {
+        zigbeeModel: ["Hospitality on off plug", "Hospitality on off plug\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"],
+        model: "WNP10",
+        vendor: "Legrand",
+        description: "Smart plug-in switch with Netatmo",
+        ota: true,
+        fromZigbee: [fz.on_off, fzLegrand.binary_input_on_off, fzLegrand.cluster_fc01],
+        toZigbee: [tz.on_off, tzLegrand.led_mode],
+        extend: [legrandExtend.addLegrandDevicesCluster(), m.identify(), m.commandsOnOff()],
+        exposes: [e.switch(), eLegrand.ledInDark(), eLegrand.ledIfOn()],
+        configure: async (device, coordinatorEndpoint) => {
+            const endpoint = device.getEndpoint(1);
+            await reporting.bind(endpoint, coordinatorEndpoint, ["genIdentify", "genOnOff", "genBinaryInput"]);
+            await reporting.onOff(endpoint);
         },
     },
 ];
